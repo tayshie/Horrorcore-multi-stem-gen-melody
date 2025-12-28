@@ -4,18 +4,20 @@ import * as Tone from "tone";
 import { Composition, MelodyLayer } from "../types";
 
 const instrumentMap: Record<string, number> = {
-  bell: 10,    // Music Box / Glockenspiel
-  piano: 0,   // Acoustic Grand Piano
-  string: 48, // String Ensemble 1
-  bass: 38,   // Slap Bass 2 / Synth Bass
-  lead: 81,   // Lead 2 (sawtooth)
+  bell: 10,
+  piano: 0,
+  string: 48,
+  bass: 38,
+  lead: 81,
+  pad: 89,
+  brass: 62,
 };
 
 export const exportToMidi = (composition: Composition, singleLayer?: MelodyLayer): Blob => {
   const midi = new Midi();
   midi.header.name = singleLayer 
-    ? `${composition.vibe} - ${singleLayer.name}` 
-    : `${composition.vibe} - Devereaux Style`;
+    ? `${composition.producer} - ${singleLayer.name}` 
+    : `${composition.producer} - ${composition.vibe}`;
   midi.header.setTempo(composition.bpm);
 
   const layersToExport = singleLayer ? [singleLayer] : composition.layers;
@@ -51,7 +53,7 @@ export const downloadMidi = (composition: Composition, layer?: MelodyLayer) => {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   const suffix = layer ? `_${layer.instrument}` : "";
-  const filename = `${composition.vibe.replace(/\s+/g, "_")}${suffix}_Horrorcore.mid`;
+  const filename = `${composition.producer.replace(/\s+/g, "_")}${suffix}.mid`;
   a.href = url;
   a.download = filename;
   document.body.appendChild(a);

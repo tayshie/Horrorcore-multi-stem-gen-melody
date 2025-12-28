@@ -28,10 +28,15 @@ class AudioEngine {
   }
 
   private initSynths() {
-    const instruments: ('bell' | 'piano' | 'string' | 'bass' | 'lead')[] = ['bell', 'piano', 'string', 'bass', 'lead'];
+    const instruments: ('bell' | 'piano' | 'string' | 'bass' | 'lead' | 'pad' | 'brass')[] = 
+      ['bell', 'piano', 'string', 'bass', 'lead', 'pad', 'brass'];
     
     instruments.forEach(inst => {
-      const channel = new Tone.Channel().connect(inst === 'bass' ? this.distortion : inst === 'string' ? this.reverb : this.delay);
+      const channel = new Tone.Channel().connect(
+        inst === 'bass' ? this.distortion : 
+        (inst === 'string' || inst === 'pad') ? this.reverb : 
+        this.delay
+      );
       this.channelStrips.set(inst, channel);
     });
 
@@ -41,49 +46,56 @@ class AudioEngine {
       modulationIndex: 14,
       oscillator: { type: 'sine' },
       modulation: { type: 'square' },
-      envelope: { attack: 0.005, decay: 0.5, sustain: 0.1, release: 2.5 },
-      modulationEnvelope: { attack: 0.01, decay: 0.3, sustain: 0, release: 0.5 }
+      envelope: { attack: 0.005, decay: 0.5, sustain: 0.1, release: 2.5 }
     }).connect(this.channelStrips.get('bell')!);
     this.synths.set('bell', bell);
 
-    // 2. Detuned Dark Piano
+    // 2. Multi-genre Piano/Rhodes
     const piano = new Tone.PolySynth(Tone.AMSynth, {
       harmonicity: 1.5,
       oscillator: { type: 'triangle' },
-      modulation: { type: 'sine' },
-      envelope: { attack: 0.02, decay: 1.2, sustain: 0.1, release: 1.5 },
-      modulationEnvelope: { attack: 0.1, decay: 0.5, sustain: 1, release: 0.5 }
+      envelope: { attack: 0.02, decay: 1.2, sustain: 0.1, release: 1.5 }
     }).connect(this.channelStrips.get('piano')!);
     this.synths.set('piano', piano);
 
-    // 3. Granular String Pad
-    const stringFilter = new Tone.Filter(800, "lowpass", -24).connect(this.channelStrips.get('string')!);
-    new Tone.LFO({ frequency: "8n", min: 400, max: 2000, type: "sine" }).connect(stringFilter.frequency).start();
+    // 3. Cinematic Strings
     const strings = new Tone.PolySynth(Tone.Synth, {
       oscillator: { type: 'fatsawtooth', count: 3, spread: 30 },
-      envelope: { attack: 2, decay: 1, sustain: 0.8, release: 4 }
-    }).connect(stringFilter);
+      envelope: { attack: 1.5, decay: 1, sustain: 0.8, release: 3 }
+    }).connect(this.channelStrips.get('string')!);
     this.synths.set('string', strings);
 
-    // 4. Industrial FM Bass
+    // 4. Heavy 808-Style FM Bass
     const bass = new Tone.PolySynth(Tone.FMSynth, {
       harmonicity: 0.5,
-      modulationIndex: 20,
+      modulationIndex: 15,
       oscillator: { type: 'sine' },
       modulation: { type: 'sawtooth' },
-      envelope: { attack: 0.05, decay: 0.4, sustain: 0.8, release: 1 },
-      modulationEnvelope: { attack: 0.1, decay: 0.2, sustain: 1, release: 0.4 }
+      envelope: { attack: 0.01, decay: 0.4, sustain: 0.9, release: 1.2 }
     }).connect(this.channelStrips.get('bass')!);
     this.synths.set('bass', bass);
 
-    // 5. Screeching AM Lead
+    // 5. Piercing Lead
     const lead = new Tone.PolySynth(Tone.AMSynth, {
       harmonicity: 2,
       oscillator: { type: 'pulse', width: 0.2 },
-      modulation: { type: 'sine' },
-      envelope: { attack: 0.1, decay: 0.2, sustain: 0.4, release: 1.2 }
+      envelope: { attack: 0.05, decay: 0.2, sustain: 0.4, release: 1 }
     }).connect(this.channelStrips.get('lead')!);
     this.synths.set('lead', lead);
+
+    // 6. Lush Pad
+    const pad = new Tone.PolySynth(Tone.Synth, {
+      oscillator: { type: 'sine' },
+      envelope: { attack: 3, decay: 1, sustain: 1, release: 5 }
+    }).connect(this.channelStrips.get('pad')!);
+    this.synths.set('pad', pad);
+
+    // 7. Aggressive Synth Brass
+    const brass = new Tone.PolySynth(Tone.Synth, {
+      oscillator: { type: 'sawtooth' },
+      envelope: { attack: 0.1, decay: 0.3, sustain: 0.5, release: 0.8 }
+    }).connect(this.channelStrips.get('brass')!);
+    this.synths.set('brass', brass);
   }
 
   public async setComposition(composition: Composition) {

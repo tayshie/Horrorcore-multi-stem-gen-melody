@@ -1,12 +1,14 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { VibeType, Composition, MUSICAL_KEYS, MelodyLayer } from './types';
-import { generateHorrorMelody } from './services/geminiService';
+import { PRODUCER_GROUPS, VibeType, Composition, MUSICAL_KEYS, MelodyLayer } from './types';
+import { generateProducerMelody } from './services/geminiService';
 import { audioEngine } from './services/audioEngine';
 import { downloadMidi } from './services/midiService';
 
 const App: React.FC = () => {
-  const [vibe, setVibe] = useState<VibeType>(VibeType.ASYLUM);
+  const [selectedProducer, setSelectedProducer] = useState<string>("Metro Boomin");
+  const [selectedCategory, setSelectedCategory] = useState<string>("Trap");
+  const [vibe, setVibe] = useState<VibeType>(VibeType.DARK);
   const [selectedKey, setSelectedKey] = useState<string>('C');
   const [composition, setComposition] = useState<Composition | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -18,6 +20,8 @@ const App: React.FC = () => {
     string: { volume: 0, muted: false },
     bass: { volume: 0, muted: false },
     lead: { volume: 0, muted: false },
+    pad: { volume: 0, muted: false },
+    brass: { volume: 0, muted: false },
   });
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -26,13 +30,12 @@ const App: React.FC = () => {
   const handleGenerate = async () => {
     setIsLoading(true);
     try {
-      const newComp = await generateHorrorMelody(vibe, selectedKey);
+      const newComp = await generateProducerMelody(selectedProducer, selectedCategory, vibe, selectedKey);
       setComposition(newComp);
       await audioEngine.setComposition(newComp);
-      // Reset mixer for new composition if needed, or keep settings
     } catch (err) {
       console.error(err);
-      alert("The darkness refused to manifest. Try again.");
+      alert("The session crashed. Re-architecting...");
     } finally {
       setIsLoading(false);
     }
@@ -71,7 +74,6 @@ const App: React.FC = () => {
     audioEngine.setVolume(masterVolume);
   }, [masterVolume]);
 
-  // Visualizer Animation
   useEffect(() => {
     const analyzer = audioEngine.getAnalyzer();
     const bufferLength = analyzer.size;
@@ -116,98 +118,99 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen p-4 md:p-8 flex flex-col items-center justify-start overflow-y-auto">
       <header className="mb-8 text-center">
-        <h1 className="horror-font text-6xl md:text-8xl text-red-600 glow-red mb-2 uppercase">WICKED SHIT</h1>
-        <p className="metal-font text-2xl text-gray-400 tracking-widest uppercase">Multi-Track Horrorcore Lab</p>
+        <h1 className="horror-font text-6xl md:text-8xl text-red-600 glow-red mb-2 uppercase tracking-tighter">WICKED SHIT</h1>
+        <p className="metal-font text-2xl text-gray-500 tracking-[0.2em] uppercase">Executive Producer Simulation</p>
       </header>
 
-      <main className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Left Column: Configuration */}
-        <div className="lg:col-span-1 flex flex-col gap-6">
-          <div className="dark-panel p-5 rounded-lg border-red-900/30">
-            <h2 className="text-sm font-bold mb-4 text-red-500 uppercase tracking-widest">Environment</h2>
-            <div className="flex flex-col gap-2">
-              {Object.values(VibeType).map((v) => (
-                <button
-                  key={v}
-                  onClick={() => setVibe(v)}
-                  className={`p-3 text-left text-xs transition-all rounded border ${
-                    vibe === v 
-                      ? 'bg-red-900/40 border-red-600 text-white shadow-[0_0_15px_rgba(220,38,38,0.3)]' 
-                      : 'bg-black/40 border-gray-800 text-gray-500 hover:border-gray-600'
-                  }`}
-                >
-                  {v}
-                </button>
-              ))}
+      <main className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Left Column: Multi-Category Producer Selector */}
+        <div className="lg:col-span-1 flex flex-col gap-4 overflow-y-auto max-h-[80vh] pr-2 custom-scroll">
+          {Object.entries(PRODUCER_GROUPS).map(([cat, producers]) => (
+            <div key={cat} className="dark-panel p-3 rounded-lg border-red-900/20">
+              <h2 className="text-[10px] font-black mb-2 text-red-800 uppercase tracking-widest">{cat}</h2>
+              <div className="flex flex-wrap gap-1">
+                {producers.map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => { setSelectedProducer(p); setSelectedCategory(cat); }}
+                    className={`px-2 py-1 text-[9px] transition-all rounded border ${
+                      selectedProducer === p 
+                        ? 'bg-red-600 border-red-400 text-white shadow-[0_0_10px_rgba(220,38,38,0.4)]' 
+                        : 'bg-black/40 border-gray-800 text-gray-500 hover:border-gray-600'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          ))}
 
-          <div className="dark-panel p-5 rounded-lg border-red-900/30">
-            <h2 className="text-sm font-bold mb-4 text-red-500 uppercase tracking-widest">Spectral Root</h2>
-            <div className="grid grid-cols-4 gap-1">
-              {MUSICAL_KEYS.map((k) => (
-                <button
-                  key={k}
-                  onClick={() => setSelectedKey(k)}
-                  className={`py-1 text-center text-[10px] font-bold transition-all rounded border ${
-                    selectedKey === k 
-                      ? 'bg-red-600 border-red-400 text-white shadow-[0_0_10px_rgba(220,38,38,0.5)]' 
-                      : 'bg-black/40 border-gray-800 text-gray-500 hover:border-gray-600'
-                  }`}
-                >
-                  {k}
-                </button>
-              ))}
-            </div>
+          <div className="dark-panel p-4 rounded-lg border-red-900/30 mt-2">
+             <h2 className="text-[10px] font-black mb-2 text-red-500 uppercase tracking-widest">Atmospheric Scale</h2>
+             <div className="grid grid-cols-6 gap-1 mb-4">
+                {MUSICAL_KEYS.map((k) => (
+                  <button
+                    key={k}
+                    onClick={() => setSelectedKey(k)}
+                    className={`py-1 text-[8px] font-bold transition-all rounded border ${
+                      selectedKey === k ? 'bg-red-600 text-white border-red-400' : 'bg-black border-gray-800 text-gray-600'
+                    }`}
+                  >
+                    {k}
+                  </button>
+                ))}
+             </div>
+             <button
+              onClick={handleGenerate}
+              disabled={isLoading}
+              className={`w-full py-4 text-sm horror-font tracking-[0.2em] rounded transition-all ${
+                isLoading 
+                  ? 'bg-gray-800 text-gray-600 cursor-not-allowed' 
+                  : 'bg-red-700 hover:bg-red-600 text-white animate-pulse shadow-[0_0_15px_rgba(220,38,38,0.5)]'
+              }`}
+            >
+              {isLoading ? 'SAMPLING...' : `LOAD ${selectedProducer.toUpperCase()}`}
+            </button>
           </div>
-
-          <button
-            onClick={handleGenerate}
-            disabled={isLoading}
-            className={`w-full py-6 text-xl horror-font tracking-widest rounded transition-all ${
-              isLoading 
-                ? 'bg-gray-800 text-gray-600 cursor-not-allowed' 
-                : 'bg-red-700 hover:bg-red-600 text-white animate-pulse shadow-[0_0_20px_rgba(220,38,38,0.5)]'
-            }`}
-          >
-            {isLoading ? 'SUMMONING...' : 'MANIFEST LOOP'}
-          </button>
         </div>
 
-        {/* Center/Right Column: Mixer & Display */}
+        {/* Right Column: Console & Controls */}
         <div className="lg:col-span-3 flex flex-col gap-6">
-          {/* Visualizer and Master */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="md:col-span-2 dark-panel p-2 rounded-lg relative overflow-hidden h-48 border-red-900/50">
-              <canvas ref={canvasRef} width={800} height={256} className="w-full h-full opacity-60" />
+              <canvas ref={canvasRef} width={800} height={256} className="w-full h-full opacity-40 grayscale" />
               {!composition && !isLoading && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                  <p className="horror-font text-xl text-red-900">Void is silent...</p>
+                  <p className="horror-font text-lg text-red-900 uppercase tracking-widest">Awaiting Command...</p>
                 </div>
               )}
               {isLoading && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-                  <i className="fas fa-skull text-3xl text-red-600 animate-bounce"></i>
+                <div className="absolute inset-0 flex items-center justify-center bg-black/80">
+                   <div className="flex flex-col items-center">
+                    <i className="fas fa-ghost text-2xl text-red-600 animate-bounce mb-2"></i>
+                    <p className="metal-font text-[10px] text-red-500 tracking-[0.3em] uppercase">Architecting {selectedProducer} Session</p>
+                   </div>
                 </div>
               )}
             </div>
 
             <div className="dark-panel p-5 rounded-lg border-red-900/30 flex flex-col justify-between">
               <div>
-                <h3 className="text-xs uppercase text-red-500 mb-4 tracking-widest">Master Output</h3>
+                <h3 className="text-[10px] font-black uppercase text-red-500 mb-4 tracking-[0.2em]">Master Rack</h3>
                 <div className="flex items-center gap-4">
                   <button
                     onClick={togglePlay}
                     disabled={!composition}
-                    className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
-                      !composition ? 'bg-gray-800 text-gray-600' : isPlaying ? 'bg-white text-black' : 'bg-red-600 text-white'
+                    className={`w-12 h-12 rounded-full flex items-center justify-center transition-all shadow-lg ${
+                      !composition ? 'bg-gray-800 text-gray-600' : isPlaying ? 'bg-white text-black shadow-white/40' : 'bg-red-600 text-white shadow-red-600/40'
                     }`}
                   >
                     <i className={`fas ${isPlaying ? 'fa-stop' : 'fa-play'}`}></i>
                   </button>
                   {composition && (
-                    <button onClick={handleDownloadFull} className="text-gray-500 hover:text-white transition-colors">
-                      <i className="fas fa-file-export text-xl" title="Export Full Mix"></i>
+                    <button onClick={handleDownloadFull} className="w-10 h-10 rounded-full border border-red-900/50 flex items-center justify-center text-gray-500 hover:text-white hover:bg-red-900/30">
+                      <i className="fas fa-save" title="Export Project"></i>
                     </button>
                   )}
                 </div>
@@ -223,55 +226,47 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          {/* Instrument Mixer */}
           <div className="dark-panel p-6 rounded-lg border-red-900/30">
-            <h2 className="text-sm font-bold mb-6 text-red-500 uppercase tracking-widest border-b border-red-900/20 pb-2 flex justify-between">
-              <span>Instrument Separation Rack</span>
-              {composition && <span className="text-[10px] text-gray-500 lowercase">{composition.bpm} BPM // {composition.key}</span>}
+            <h2 className="text-[10px] font-black mb-6 text-red-500 uppercase tracking-[0.3em] border-b border-red-900/20 pb-2 flex justify-between">
+              <span>Channel Strips</span>
+              {composition && <span className="text-gray-600 lowercase">{composition.producer} // {composition.bpm} BPM</span>}
             </h2>
             
             {!composition ? (
-              <div className="h-48 flex items-center justify-center border border-dashed border-gray-800 rounded">
-                <p className="text-gray-700 uppercase text-xs tracking-widest">No active stems</p>
+              <div className="h-40 flex items-center justify-center border border-dashed border-gray-800 rounded-lg">
+                <p className="text-gray-800 uppercase text-[9px] tracking-[0.5em]">Session Offline</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
                 {composition.layers.map((layer, idx) => {
                   const settings = trackSettings[layer.instrument] || { volume: 0, muted: false };
                   return (
-                    <div key={idx} className={`p-4 rounded border transition-all ${settings.muted ? 'bg-black/80 border-gray-900 opacity-40' : 'bg-black/40 border-gray-800'}`}>
-                      <div className="flex justify-between items-start mb-4">
-                        <div className="overflow-hidden">
-                          <p className="text-[10px] text-red-600 uppercase font-bold tracking-tighter truncate">{layer.instrument}</p>
-                          <p className="text-[8px] text-gray-500 truncate">{layer.name}</p>
+                    <div key={idx} className={`p-3 rounded-lg border transition-all ${settings.muted ? 'bg-black opacity-30 border-transparent' : 'bg-black/60 border-gray-900'}`}>
+                      <div className="flex flex-col gap-1 mb-4 overflow-hidden">
+                        <div className="flex justify-between items-center">
+                          <p className="text-[8px] text-red-700 uppercase font-black truncate">{layer.instrument}</p>
+                          <button onClick={() => handleDownloadTrack(layer)} className="text-[8px] text-gray-700 hover:text-white"><i className="fas fa-download"></i></button>
                         </div>
-                        <button 
-                          onClick={() => handleDownloadTrack(layer)}
-                          className="text-gray-600 hover:text-red-500 transition-colors"
-                        >
-                          <i className="fas fa-download text-[10px]"></i>
-                        </button>
                       </div>
 
-                      <div className="h-32 flex flex-col items-center gap-4">
-                        <div className="relative h-24 w-1 bg-gray-900 rounded-full overflow-hidden flex items-end">
+                      <div className="h-24 flex flex-col items-center gap-3">
+                        <div className="relative h-16 w-1 bg-gray-900 rounded-full flex items-end">
                            <input 
                               type="range" orient="vertical" min="-40" max="6" step="1"
                               value={settings.volume}
                               onChange={(e) => handleTrackVolumeChange(layer.instrument, Number(e.target.value))}
                               className="absolute inset-0 w-1 h-full opacity-0 cursor-pointer"
-                              style={{ transform: 'rotate(0deg)', writingMode: 'bt-lr' } as any}
                            />
-                           <div className="w-full bg-red-600" style={{ height: `${((settings.volume + 40) / 46) * 100}%` }}></div>
+                           <div className="w-full bg-red-800 rounded-full" style={{ height: `${((settings.volume + 40) / 46) * 100}%` }}></div>
                         </div>
                         
                         <button
                           onClick={() => toggleTrackMute(layer.instrument)}
-                          className={`w-full py-1 text-[9px] uppercase font-bold rounded border transition-all ${
-                            settings.muted ? 'bg-red-900/20 border-red-600 text-red-500' : 'bg-gray-900 border-gray-800 text-gray-500'
+                          className={`w-full py-1 text-[7px] uppercase font-bold rounded border transition-all ${
+                            settings.muted ? 'bg-red-900/20 border-red-600 text-red-600' : 'bg-gray-900 border-gray-800 text-gray-700'
                           }`}
                         >
-                          {settings.muted ? 'Muted' : 'Mute'}
+                          {settings.muted ? 'Kill' : 'Live'}
                         </button>
                       </div>
                     </div>
@@ -283,8 +278,8 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      <footer className="mt-12 text-gray-700 text-[10px] text-center uppercase tracking-[0.3em]">
-        Wicked Shit Industrial Engine // Multi-Stem Architecture // V2.5
+      <footer className="mt-8 text-gray-800 text-[8px] text-center uppercase tracking-[0.6em] pb-4">
+        Synthetic Soul Architecture // Global Production Lab // V4.0
       </footer>
     </div>
   );
