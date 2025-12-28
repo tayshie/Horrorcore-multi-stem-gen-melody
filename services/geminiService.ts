@@ -2,12 +2,13 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Composition, VibeType } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+// Initialize the GoogleGenAI client with the API key from environment variables.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const COMPOSITION_SCHEMA = {
   type: Type.OBJECT,
   properties: {
-    bpm: { type: Type.NUMBER, description: "BPM appropriate for the producer's typical style." },
+    bpm: { type: Type.NUMBER, description: "BPM appropriate for the producer's typical style, or the requested BPM." },
     layers: {
       type: Type.ARRAY,
       items: {
@@ -36,13 +37,15 @@ const COMPOSITION_SCHEMA = {
   required: ["bpm", "layers"]
 };
 
-export const generateProducerMelody = async (producer: string, category: string, vibe: VibeType, key: string): Promise<Composition> => {
+export const generateProducerMelody = async (producer: string, category: string, vibe: VibeType, key: string, targetBpm?: number): Promise<Composition> => {
   const prompt = `
-    Generate a 4-bar rap melody loop in the SPECIFIC style of legendary producer: ${producer} (${category}).
+    Generate a professional 4-bar rap melody loop in the SPECIFIC style of legendary producer: ${producer} (${category}).
     Vibe Context: ${vibe}.
     Musical Key: ${key}.
+    Target BPM: ${targetBpm || 'Automatic choice based on style'}.
 
     Style Archetypes to follow:
+    - Devereaux: Gritty, industrial, heavy distortion feel, eerie bells mixed with aggressive synth-leads.
     - Young Chop: Simplistic, hard-hitting, signature bell melodies, usually 130-140 BPM.
     - Zaytoven: Complex, fast piano runs, organ swells, soulful but trap-tempo (140+ BPM).
     - Metro Boomin: Dark, cinematic, moody pads and eerie melodies, heavy 808-focused sub-melodies.
@@ -53,17 +56,17 @@ export const generateProducerMelody = async (producer: string, category: string,
     - J Dilla/Madlib: Soulful jazz chords, "drunk" rhythmic placement (slight swing), minor 7ths.
     - The Neptunes/Timbaland: Futuristic, minimalist, strange percussion-like leads, unconventional intervals.
     - Scott Storch: High-class synth leads, Middle Eastern melodic scales, piano virtuosity.
-    - Necro/Esham: Maximum dissonance, industrial-horror crossover, very aggressive.
 
     Instructions:
-    1. Ensure the melody captures the ESSENCE of ${producer}.
+    1. Capture the unique sonic signature of ${producer}.
     2. Length: Exactly 4 Bars.
-    3. Scale: Adhere to ${key} (use minor/harmonic scales for dark vibes).
+    3. Scale: Adhere to ${key}.
+    4. Rhythmic integrity: Ensure note durations and times fit perfectly within the 4-bar grid at ${targetBpm || 'the chosen'} BPM.
   `;
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: 'gemini-3-pro-preview',
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -78,7 +81,7 @@ export const generateProducerMelody = async (producer: string, category: string,
       category,
       vibe,
       key,
-      bpm: data.bpm,
+      bpm: targetBpm || data.bpm,
       layers: data.layers,
       createdAt: Date.now(),
     };

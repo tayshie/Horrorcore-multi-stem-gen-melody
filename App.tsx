@@ -1,17 +1,20 @@
-
 import React, { useState, useEffect, useRef } from 'react';
-import { PRODUCER_GROUPS, VibeType, Composition, MUSICAL_KEYS, MelodyLayer } from './types';
+import { PRODUCER_GROUPS, VibeType, Composition, MUSICAL_KEYS, MelodyLayer, ProducerCategory } from './types';
 import { generateProducerMelody } from './services/geminiService';
 import { audioEngine } from './services/audioEngine';
 import { downloadMidi } from './services/midiService';
+import { downloadAudio } from './services/audioExportService';
 
 const App: React.FC = () => {
+  const [activeCategory, setActiveCategory] = useState<ProducerCategory>("Trap");
   const [selectedProducer, setSelectedProducer] = useState<string>("Metro Boomin");
-  const [selectedCategory, setSelectedCategory] = useState<string>("Trap");
   const [vibe, setVibe] = useState<VibeType>(VibeType.DARK);
   const [selectedKey, setSelectedKey] = useState<string>('C');
+  const [targetBpm, setTargetBpm] = useState<number>(140);
+  const [isAutoBpm, setIsAutoBpm] = useState<boolean>(true);
   const [composition, setComposition] = useState<Composition | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [masterVolume, setMasterVolume] = useState(-10);
   const [trackSettings, setTrackSettings] = useState<Record<string, { volume: number, muted: boolean }>>({
@@ -30,12 +33,19 @@ const App: React.FC = () => {
   const handleGenerate = async () => {
     setIsLoading(true);
     try {
-      const newComp = await generateProducerMelody(selectedProducer, selectedCategory, vibe, selectedKey);
+      const newComp = await generateProducerMelody(
+        selectedProducer, 
+        activeCategory, 
+        vibe, 
+        selectedKey, 
+        isAutoBpm ? undefined : targetBpm
+      );
       setComposition(newComp);
+      if (isAutoBpm) setTargetBpm(newComp.bpm);
       await audioEngine.setComposition(newComp);
     } catch (err) {
       console.error(err);
-      alert("The session crashed. Re-architecting...");
+      alert("Neural sync failure. Retrying...");
     } finally {
       setIsLoading(false);
     }
@@ -62,12 +72,28 @@ const App: React.FC = () => {
     audioEngine.setTrackMute(inst, newMuted);
   };
 
-  const handleDownloadFull = () => {
+  const handleDownloadFullMidi = () => {
     if (composition) downloadMidi(composition);
   };
 
-  const handleDownloadTrack = (layer: MelodyLayer) => {
+  const handleDownloadFullAudio = async () => {
+    if (composition) {
+      setIsExporting(true);
+      await downloadAudio(composition);
+      setIsExporting(false);
+    }
+  };
+
+  const handleDownloadTrackMidi = (layer: MelodyLayer) => {
     if (composition) downloadMidi(composition, layer);
+  };
+
+  const handleDownloadTrackAudio = async (layer: MelodyLayer) => {
+    if (composition) {
+      setIsExporting(true);
+      await downloadAudio(composition, layer);
+      setIsExporting(false);
+    }
   };
 
   useEffect(() => {
@@ -90,53 +116,130 @@ const App: React.FC = () => {
         dataArray[i] = (Number(v) + 140) * 2; 
       });
 
-      ctx.fillStyle = 'rgba(10, 10, 10, 0.2)';
+      ctx.fillStyle = 'rgba(5, 5, 5, 0.4)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = '#ff1a1a';
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = '#991b1b';
       ctx.beginPath();
-
       const sliceWidth = (canvas.width * 1.0) / bufferLength;
       let x = 0;
-
       for (let i = 0; i < bufferLength; i++) {
         const v = dataArray[i] / 128.0;
         const y = (v * canvas.height) / 2;
         if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         x += sliceWidth;
       }
-
       ctx.lineTo(canvas.width, canvas.height / 2);
       ctx.stroke();
     };
-
     draw();
     return () => { if (requestRef.current) cancelAnimationFrame(requestRef.current); };
   }, []);
 
   return (
-    <div className="min-h-screen p-4 md:p-8 flex flex-col items-center justify-start overflow-y-auto">
-      <header className="mb-8 text-center">
-        <h1 className="horror-font text-6xl md:text-8xl text-red-600 glow-red mb-2 uppercase tracking-tighter">WICKED SHIT</h1>
-        <p className="metal-font text-2xl text-gray-500 tracking-[0.2em] uppercase">Executive Producer Simulation</p>
+    <div className="h-screen w-screen flex flex-col bg-[#050505] overflow-hidden text-gray-300">
+      {/* Header Bar */}
+      <header className="h-16 border-b border-red-900/30 flex items-center justify-between px-6 bg-black/50 backdrop-blur-md z-10">
+        <div className="flex items-center gap-4">
+          <h1 className="horror-font text-3xl text-red-600 glow-red tracking-tighter uppercase">MOTHA FUCKIN MELODY</h1>
+          <div className="h-4 w-[1px] bg-red-900/50"></div>
+          <span className="metal-font text-xs tracking-widest text-gray-500 uppercase">Lab V4.3 // {selectedProducer}</span>
+        </div>
+        
+        <div className="flex items-center gap-6">
+           <div className="flex flex-col items-end">
+             <span className="text-[10px] text-red-900 uppercase font-black tracking-widest">Master Feed</span>
+             <input
+                type="range" min="-40" max="0" step="1"
+                value={masterVolume}
+                onChange={(e) => setMasterVolume(Number(e.target.value))}
+                className="w-24 h-1 bg-gray-900 appearance-none accent-red-600 cursor-pointer"
+              />
+           </div>
+           <button
+              onClick={togglePlay}
+              disabled={!composition || isExporting}
+              className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+                !composition || isExporting ? 'bg-gray-800 text-gray-600' : isPlaying ? 'bg-white text-black shadow-lg shadow-white/20' : 'bg-red-600 text-white shadow-lg shadow-red-600/30'
+              }`}
+            >
+              <i className={`fas ${isPlaying ? 'fa-stop' : 'fa-play'} text-sm`}></i>
+            </button>
+        </div>
       </header>
 
-      <main className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Left Column: Multi-Category Producer Selector */}
-        <div className="lg:col-span-1 flex flex-col gap-4 overflow-y-auto max-h-[80vh] pr-2 custom-scroll">
-          {Object.entries(PRODUCER_GROUPS).map(([cat, producers]) => (
-            <div key={cat} className="dark-panel p-3 rounded-lg border-red-900/20">
-              <h2 className="text-[10px] font-black mb-2 text-red-800 uppercase tracking-widest">{cat}</h2>
-              <div className="flex flex-wrap gap-1">
-                {producers.map((p) => (
+      <div className="flex-1 flex overflow-hidden">
+        {/* Sidebar: Categories */}
+        <aside className="w-48 border-r border-red-900/20 bg-black/40 flex flex-col p-4 gap-2 overflow-y-auto">
+          <h2 className="text-[10px] font-black text-red-900 mb-2 uppercase tracking-[0.2em]">Categories</h2>
+          {Object.keys(PRODUCER_GROUPS).map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setActiveCategory(cat as ProducerCategory)}
+              className={`p-3 text-left text-[11px] uppercase tracking-tighter rounded transition-all border ${
+                activeCategory === cat ? 'bg-red-900/20 border-red-600 text-white' : 'bg-transparent border-transparent text-gray-600 hover:text-gray-400'
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+          
+          <div className="mt-auto pt-6 border-t border-red-900/10">
+             <h2 className="text-[10px] font-black text-red-900 mb-2 uppercase tracking-[0.2em]">Atmosphere</h2>
+             <select 
+               value={vibe} 
+               onChange={(e) => setVibe(e.target.value as VibeType)}
+               className="w-full bg-black border border-gray-800 text-[10px] p-2 rounded text-gray-400 outline-none mb-4"
+             >
+               {Object.values(VibeType).map(v => <option key={v} value={v}>{v}</option>)}
+             </select>
+
+             <h2 className="text-[10px] font-black text-red-900 mb-2 uppercase tracking-[0.2em]">Tempo Control</h2>
+             <div className="flex flex-col gap-2">
+                <div className="flex justify-between items-center px-1">
+                  <span className="text-[9px] text-gray-500 uppercase">Auto BPM</span>
+                  <input 
+                    type="checkbox" 
+                    checked={isAutoBpm} 
+                    onChange={(e) => setIsAutoBpm(e.target.checked)}
+                    className="accent-red-600 h-3 w-3"
+                  />
+                </div>
+                {!isAutoBpm && (
+                  <div className="flex flex-col gap-1">
+                    <input 
+                      type="range" min="60" max="200" step="1"
+                      value={targetBpm}
+                      onChange={(e) => setTargetBpm(Number(e.target.value))}
+                      className="w-full h-1 bg-gray-900 appearance-none accent-red-600"
+                    />
+                    <span className="text-center text-[10px] text-red-600 font-bold">{targetBpm} BPM</span>
+                  </div>
+                )}
+             </div>
+          </div>
+        </aside>
+
+        {/* Main Interface */}
+        <main className="flex-1 flex flex-col p-6 gap-6 overflow-y-auto custom-scroll">
+          
+          {/* Top Row: Producers & Generation */}
+          <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 dark-panel p-6 rounded-xl border-red-900/20 flex flex-col gap-4">
+              <div className="flex justify-between items-center mb-2">
+                <h2 className="text-xs font-black text-red-600 uppercase tracking-widest">Select Producer Signature</h2>
+                <span className="text-[9px] text-gray-600 uppercase tracking-widest">{PRODUCER_GROUPS[activeCategory].length} Signals Detected</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {PRODUCER_GROUPS[activeCategory].map((p) => (
                   <button
                     key={p}
-                    onClick={() => { setSelectedProducer(p); setSelectedCategory(cat); }}
-                    className={`px-2 py-1 text-[9px] transition-all rounded border ${
+                    onClick={() => setSelectedProducer(p)}
+                    className={`px-4 py-2 text-[10px] font-bold rounded-lg transition-all border ${
                       selectedProducer === p 
-                        ? 'bg-red-600 border-red-400 text-white shadow-[0_0_10px_rgba(220,38,38,0.4)]' 
-                        : 'bg-black/40 border-gray-800 text-gray-500 hover:border-gray-600'
+                        ? 'bg-red-600 border-red-400 text-white shadow-md' 
+                        : 'bg-black/60 border-gray-800 text-gray-500 hover:border-gray-600'
                     }`}
                   >
                     {p}
@@ -144,142 +247,132 @@ const App: React.FC = () => {
                 ))}
               </div>
             </div>
-          ))}
 
-          <div className="dark-panel p-4 rounded-lg border-red-900/30 mt-2">
-             <h2 className="text-[10px] font-black mb-2 text-red-500 uppercase tracking-widest">Atmospheric Scale</h2>
-             <div className="grid grid-cols-6 gap-1 mb-4">
-                {MUSICAL_KEYS.map((k) => (
-                  <button
-                    key={k}
-                    onClick={() => setSelectedKey(k)}
-                    className={`py-1 text-[8px] font-bold transition-all rounded border ${
-                      selectedKey === k ? 'bg-red-600 text-white border-red-400' : 'bg-black border-gray-800 text-gray-600'
-                    }`}
-                  >
-                    {k}
-                  </button>
-                ))}
-             </div>
-             <button
-              onClick={handleGenerate}
-              disabled={isLoading}
-              className={`w-full py-4 text-sm horror-font tracking-[0.2em] rounded transition-all ${
-                isLoading 
-                  ? 'bg-gray-800 text-gray-600 cursor-not-allowed' 
-                  : 'bg-red-700 hover:bg-red-600 text-white animate-pulse shadow-[0_0_15px_rgba(220,38,38,0.5)]'
-              }`}
-            >
-              {isLoading ? 'SAMPLING...' : `LOAD ${selectedProducer.toUpperCase()}`}
-            </button>
-          </div>
-        </div>
-
-        {/* Right Column: Console & Controls */}
-        <div className="lg:col-span-3 flex flex-col gap-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="md:col-span-2 dark-panel p-2 rounded-lg relative overflow-hidden h-48 border-red-900/50">
-              <canvas ref={canvasRef} width={800} height={256} className="w-full h-full opacity-40 grayscale" />
-              {!composition && !isLoading && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                  <p className="horror-font text-lg text-red-900 uppercase tracking-widest">Awaiting Command...</p>
-                </div>
-              )}
-              {isLoading && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/80">
-                   <div className="flex flex-col items-center">
-                    <i className="fas fa-ghost text-2xl text-red-600 animate-bounce mb-2"></i>
-                    <p className="metal-font text-[10px] text-red-500 tracking-[0.3em] uppercase">Architecting {selectedProducer} Session</p>
-                   </div>
-                </div>
-              )}
-            </div>
-
-            <div className="dark-panel p-5 rounded-lg border-red-900/30 flex flex-col justify-between">
+            <div className="dark-panel p-6 rounded-xl border-red-900/20 flex flex-col justify-between">
               <div>
-                <h3 className="text-[10px] font-black uppercase text-red-500 mb-4 tracking-[0.2em]">Master Rack</h3>
-                <div className="flex items-center gap-4">
-                  <button
-                    onClick={togglePlay}
-                    disabled={!composition}
-                    className={`w-12 h-12 rounded-full flex items-center justify-center transition-all shadow-lg ${
-                      !composition ? 'bg-gray-800 text-gray-600' : isPlaying ? 'bg-white text-black shadow-white/40' : 'bg-red-600 text-white shadow-red-600/40'
-                    }`}
-                  >
-                    <i className={`fas ${isPlaying ? 'fa-stop' : 'fa-play'}`}></i>
-                  </button>
-                  {composition && (
-                    <button onClick={handleDownloadFull} className="w-10 h-10 rounded-full border border-red-900/50 flex items-center justify-center text-gray-500 hover:text-white hover:bg-red-900/30">
-                      <i className="fas fa-save" title="Export Project"></i>
+                <h2 className="text-xs font-black text-red-600 uppercase tracking-widest mb-4">Musical Key</h2>
+                <div className="grid grid-cols-6 gap-1">
+                  {MUSICAL_KEYS.map((k) => (
+                    <button
+                      key={k}
+                      onClick={() => setSelectedKey(k)}
+                      className={`py-1 text-[9px] font-bold rounded border ${
+                        selectedKey === k ? 'bg-red-600 text-white border-red-400 shadow-sm' : 'bg-black border-gray-800 text-gray-600'
+                      }`}
+                    >
+                      {k}
                     </button>
-                  )}
+                  ))}
                 </div>
               </div>
-              <div className="mt-4">
-                <input
-                  type="range" min="-40" max="0" step="1"
-                  value={masterVolume}
-                  onChange={(e) => setMasterVolume(Number(e.target.value))}
-                  className="w-full h-1 bg-gray-800 rounded-lg appearance-none cursor-pointer accent-red-600"
-                />
-              </div>
+              <button
+                onClick={handleGenerate}
+                disabled={isLoading || isExporting}
+                className={`w-full py-4 mt-6 text-sm font-black horror-font tracking-[0.3em] rounded-lg transition-all ${
+                  isLoading || isExporting
+                    ? 'bg-gray-800 text-gray-600 cursor-not-allowed' 
+                    : 'bg-red-700 hover:bg-red-600 text-white animate-pulse shadow-lg shadow-red-600/20'
+                }`}
+              >
+                {isLoading ? 'SYNCING NEURALS...' : isExporting ? 'EXPORTING...' : `ARCHITECT ${selectedProducer.toUpperCase()}`}
+              </button>
             </div>
-          </div>
+          </section>
 
-          <div className="dark-panel p-6 rounded-lg border-red-900/30">
-            <h2 className="text-[10px] font-black mb-6 text-red-500 uppercase tracking-[0.3em] border-b border-red-900/20 pb-2 flex justify-between">
-              <span>Channel Strips</span>
-              {composition && <span className="text-gray-600 lowercase">{composition.producer} // {composition.bpm} BPM</span>}
-            </h2>
-            
-            {!composition ? (
-              <div className="h-40 flex items-center justify-center border border-dashed border-gray-800 rounded-lg">
-                <p className="text-gray-800 uppercase text-[9px] tracking-[0.5em]">Session Offline</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-                {composition.layers.map((layer, idx) => {
-                  const settings = trackSettings[layer.instrument] || { volume: 0, muted: false };
-                  return (
-                    <div key={idx} className={`p-3 rounded-lg border transition-all ${settings.muted ? 'bg-black opacity-30 border-transparent' : 'bg-black/60 border-gray-900'}`}>
-                      <div className="flex flex-col gap-1 mb-4 overflow-hidden">
-                        <div className="flex justify-between items-center">
-                          <p className="text-[8px] text-red-700 uppercase font-black truncate">{layer.instrument}</p>
-                          <button onClick={() => handleDownloadTrack(layer)} className="text-[8px] text-gray-700 hover:text-white"><i className="fas fa-download"></i></button>
-                        </div>
-                      </div>
-
-                      <div className="h-24 flex flex-col items-center gap-3">
-                        <div className="relative h-16 w-1 bg-gray-900 rounded-full flex items-end">
-                           <input 
-                              type="range" orient="vertical" min="-40" max="6" step="1"
-                              value={settings.volume}
-                              onChange={(e) => handleTrackVolumeChange(layer.instrument, Number(e.target.value))}
-                              className="absolute inset-0 w-1 h-full opacity-0 cursor-pointer"
-                           />
-                           <div className="w-full bg-red-800 rounded-full" style={{ height: `${((settings.volume + 40) / 46) * 100}%` }}></div>
-                        </div>
-                        
-                        <button
-                          onClick={() => toggleTrackMute(layer.instrument)}
-                          className={`w-full py-1 text-[7px] uppercase font-bold rounded border transition-all ${
-                            settings.muted ? 'bg-red-900/20 border-red-600 text-red-600' : 'bg-gray-900 border-gray-800 text-gray-700'
-                          }`}
-                        >
-                          {settings.muted ? 'Kill' : 'Live'}
-                        </button>
-                      </div>
+          {/* Visualization Row */}
+          <section className="dark-panel p-2 rounded-xl border-red-900/40 relative overflow-hidden h-40 group">
+             <canvas ref={canvasRef} width={1200} height={256} className="w-full h-full opacity-20 grayscale group-hover:grayscale-0 transition-all duration-1000" />
+             <div className="absolute inset-0 flex items-center justify-between px-10 pointer-events-none">
+                <div className="flex flex-col">
+                  <span className="text-[10px] text-red-900 font-black uppercase tracking-[0.5em]">{activeCategory} // {selectedKey} // {composition ? composition.vibe.toUpperCase() : 'SEARCHING'}</span>
+                  <span className="text-2xl font-black text-white uppercase tracking-tighter">{composition ? composition.producer : 'Awaiting Manifest...'}</span>
+                </div>
+                {composition && (
+                  <div className="flex gap-10 items-center">
+                    <div className="text-center">
+                       <p className="text-[10px] text-gray-600 uppercase tracking-widest">BPM</p>
+                       <p className="text-xl font-black text-red-600">{composition.bpm}</p>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      </main>
+                    <div className="flex gap-2 pointer-events-auto">
+                      <button 
+                        onClick={handleDownloadFullMidi}
+                        disabled={isExporting}
+                        className="w-12 h-12 rounded-full border border-red-900/30 flex items-center justify-center text-gray-500 hover:text-white hover:bg-red-900/30 transition-all shadow-md"
+                        title="Download MIDI"
+                      >
+                        <i className="fas fa-file-export text-lg"></i>
+                      </button>
+                      <button 
+                        onClick={handleDownloadFullAudio}
+                        disabled={isExporting}
+                        className={`w-12 h-12 rounded-full border border-red-900/30 flex items-center justify-center transition-all shadow-md ${isExporting ? 'text-red-900 cursor-not-allowed' : 'text-gray-500 hover:text-white hover:bg-red-900/30'}`}
+                        title="Download WAV"
+                      >
+                        <i className={`fas ${isExporting ? 'fa-spinner fa-spin' : 'fa-music'} text-lg`}></i>
+                      </button>
+                    </div>
+                  </div>
+                )}
+             </div>
+          </section>
 
-      <footer className="mt-8 text-gray-800 text-[8px] text-center uppercase tracking-[0.6em] pb-4">
-        Synthetic Soul Architecture // Global Production Lab // V4.0
+          {/* Stem Mixer Rack */}
+          <section className="flex-1 dark-panel p-6 rounded-xl border-red-900/20 flex flex-col gap-4">
+             <div className="flex justify-between items-center border-b border-red-900/10 pb-4">
+               <h2 className="text-xs font-black text-red-600 uppercase tracking-widest">Stem Isolation Rack</h2>
+               <p className="text-[9px] text-gray-700 italic uppercase">Independent Node Export Active</p>
+             </div>
+             
+             {!composition ? (
+               <div className="flex-1 flex items-center justify-center">
+                 <p className="horror-font text-3xl text-gray-900 uppercase tracking-widest opacity-20">Void State</p>
+               </div>
+             ) : (
+               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+                 {composition.layers.map((layer, idx) => {
+                   const settings = trackSettings[layer.instrument] || { volume: 0, muted: false };
+                   return (
+                     <div key={idx} className={`p-4 rounded-xl border transition-all ${settings.muted ? 'bg-black opacity-20 border-transparent' : 'bg-black/60 border-gray-800 hover:border-red-900/40 shadow-xl'}`}>
+                        <div className="flex justify-between items-center mb-6">
+                           <span className="text-[9px] font-black text-red-700 uppercase tracking-tighter">{layer.instrument}</span>
+                           <div className="flex gap-2">
+                             <button onClick={() => handleDownloadTrackMidi(layer)} className="text-[10px] text-gray-700 hover:text-white transition-colors" title="Track MIDI"><i className="fas fa-file-code"></i></button>
+                             <button onClick={() => handleDownloadTrackAudio(layer)} className="text-[10px] text-gray-700 hover:text-white transition-colors" title="Track WAV"><i className="fas fa-wave-square"></i></button>
+                           </div>
+                        </div>
+
+                        <div className="h-24 flex flex-col items-center gap-4">
+                           <div className="relative h-16 w-1 bg-gray-900 rounded-full flex items-end">
+                              <input 
+                                 type="range" orient="vertical" min="-40" max="6" step="1"
+                                 value={settings.volume}
+                                 onChange={(e) => handleTrackVolumeChange(layer.instrument, Number(e.target.value))}
+                                 className="absolute inset-0 w-1 h-full opacity-0 cursor-pointer"
+                              />
+                              <div className="w-full bg-red-600 rounded-full shadow-[0_0_8px_rgba(255,0,0,0.6)]" style={{ height: `${((settings.volume + 40) / 46) * 100}%` }}></div>
+                           </div>
+                           
+                           <button
+                             onClick={() => toggleTrackMute(layer.instrument)}
+                             className={`w-full py-1.5 text-[8px] font-black uppercase rounded transition-all border ${
+                               settings.muted ? 'bg-red-900/20 border-red-600 text-red-500' : 'bg-gray-900 border-gray-800 text-gray-500'
+                             }`}
+                           >
+                             {settings.muted ? 'KILLED' : 'LIVE'}
+                           </button>
+                        </div>
+                     </div>
+                   );
+                 })}
+               </div>
+             )}
+          </section>
+        </main>
+      </div>
+      
+      {/* Footer Status */}
+      <footer className="h-10 border-t border-red-900/10 flex items-center justify-center px-6 bg-black text-[8px] text-gray-800 uppercase tracking-[0.8em]">
+        End-to-End Synthetic Production Suite // Motha Fuckin Melody // WAV & MIDI Export V4.3 // Clean Sub Logic
       </footer>
     </div>
   );

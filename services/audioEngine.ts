@@ -2,6 +2,69 @@
 import * as Tone from 'tone';
 import { Composition } from '../types';
 
+export type InstrumentType = 'bell' | 'piano' | 'string' | 'bass' | 'lead' | 'pad' | 'brass';
+
+export const createSynthForInstrument = (type: InstrumentType, destination: Tone.ToneAudioNode) => {
+  let synth: Tone.PolySynth<any>;
+  
+  switch(type) {
+    case 'bell':
+      synth = new Tone.PolySynth(Tone.FMSynth, {
+        harmonicity: 3.01,
+        modulationIndex: 14,
+        oscillator: { type: 'sine' },
+        modulation: { type: 'square' },
+        envelope: { attack: 0.005, decay: 0.5, sustain: 0.1, release: 2.5 }
+      });
+      break;
+    case 'piano':
+      synth = new Tone.PolySynth(Tone.AMSynth, {
+        harmonicity: 1.5,
+        oscillator: { type: 'triangle' },
+        envelope: { attack: 0.02, decay: 1.2, sustain: 0.1, release: 1.5 }
+      });
+      break;
+    case 'string':
+      synth = new Tone.PolySynth(Tone.Synth, {
+        oscillator: { type: 'fatsawtooth', count: 3, spread: 30 },
+        envelope: { attack: 1.5, decay: 1, sustain: 0.8, release: 3 }
+      });
+      break;
+    case 'bass':
+      synth = new Tone.PolySynth(Tone.FMSynth, {
+        harmonicity: 0.5,
+        modulationIndex: 5,
+        oscillator: { type: 'sine' },
+        modulation: { type: 'sine' },
+        envelope: { attack: 0.01, decay: 0.4, sustain: 1.0, release: 1.5 }
+      });
+      break;
+    case 'lead':
+      synth = new Tone.PolySynth(Tone.AMSynth, {
+        harmonicity: 2,
+        oscillator: { type: 'pulse', width: 0.2 },
+        envelope: { attack: 0.05, decay: 0.2, sustain: 0.4, release: 1 }
+      });
+      break;
+    case 'pad':
+      synth = new Tone.PolySynth(Tone.Synth, {
+        oscillator: { type: 'sine' },
+        envelope: { attack: 3, decay: 1, sustain: 1, release: 5 }
+      });
+      break;
+    case 'brass':
+      synth = new Tone.PolySynth(Tone.Synth, {
+        oscillator: { type: 'sawtooth' },
+        envelope: { attack: 0.1, decay: 0.3, sustain: 0.5, release: 0.8 }
+      });
+      break;
+    default:
+      synth = new Tone.PolySynth(Tone.Synth);
+  }
+  
+  return synth.connect(destination);
+};
+
 class AudioEngine {
   private synths: Map<string, Tone.PolySynth<any>> = new Map();
   private channelStrips: Map<string, Tone.Channel> = new Map();
@@ -16,8 +79,8 @@ class AudioEngine {
 
   constructor() {
     this.mainVolume = new Tone.Volume(-10).toDestination();
-    this.reverb = new Tone.Reverb({ decay: 5, wet: 0.5 }).connect(this.mainVolume);
-    this.distortion = new Tone.Distortion(0.5).connect(this.reverb);
+    this.reverb = new Tone.Reverb({ decay: 5, wet: 0.3 }).connect(this.mainVolume);
+    this.distortion = new Tone.Distortion(0.15).connect(this.reverb);
     this.bitcrusher = new Tone.BitCrusher(4).connect(this.distortion);
     this.chorus = new Tone.Chorus(4, 2.5, 0.5).connect(this.bitcrusher).start();
     this.delay = new Tone.FeedbackDelay("8n.", 0.4).connect(this.chorus);
@@ -28,74 +91,18 @@ class AudioEngine {
   }
 
   private initSynths() {
-    const instruments: ('bell' | 'piano' | 'string' | 'bass' | 'lead' | 'pad' | 'brass')[] = 
-      ['bell', 'piano', 'string', 'bass', 'lead', 'pad', 'brass'];
+    const instruments: InstrumentType[] = ['bell', 'piano', 'string', 'bass', 'lead', 'pad', 'brass'];
     
     instruments.forEach(inst => {
       const channel = new Tone.Channel().connect(
-        inst === 'bass' ? this.distortion : 
+        inst === 'bass' ? this.mainVolume : 
         (inst === 'string' || inst === 'pad') ? this.reverb : 
         this.delay
       );
       this.channelStrips.set(inst, channel);
+      const synth = createSynthForInstrument(inst, channel);
+      this.synths.set(inst, synth);
     });
-
-    // 1. FM Metallic Bell
-    const bell = new Tone.PolySynth(Tone.FMSynth, {
-      harmonicity: 3.01,
-      modulationIndex: 14,
-      oscillator: { type: 'sine' },
-      modulation: { type: 'square' },
-      envelope: { attack: 0.005, decay: 0.5, sustain: 0.1, release: 2.5 }
-    }).connect(this.channelStrips.get('bell')!);
-    this.synths.set('bell', bell);
-
-    // 2. Multi-genre Piano/Rhodes
-    const piano = new Tone.PolySynth(Tone.AMSynth, {
-      harmonicity: 1.5,
-      oscillator: { type: 'triangle' },
-      envelope: { attack: 0.02, decay: 1.2, sustain: 0.1, release: 1.5 }
-    }).connect(this.channelStrips.get('piano')!);
-    this.synths.set('piano', piano);
-
-    // 3. Cinematic Strings
-    const strings = new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: 'fatsawtooth', count: 3, spread: 30 },
-      envelope: { attack: 1.5, decay: 1, sustain: 0.8, release: 3 }
-    }).connect(this.channelStrips.get('string')!);
-    this.synths.set('string', strings);
-
-    // 4. Heavy 808-Style FM Bass
-    const bass = new Tone.PolySynth(Tone.FMSynth, {
-      harmonicity: 0.5,
-      modulationIndex: 15,
-      oscillator: { type: 'sine' },
-      modulation: { type: 'sawtooth' },
-      envelope: { attack: 0.01, decay: 0.4, sustain: 0.9, release: 1.2 }
-    }).connect(this.channelStrips.get('bass')!);
-    this.synths.set('bass', bass);
-
-    // 5. Piercing Lead
-    const lead = new Tone.PolySynth(Tone.AMSynth, {
-      harmonicity: 2,
-      oscillator: { type: 'pulse', width: 0.2 },
-      envelope: { attack: 0.05, decay: 0.2, sustain: 0.4, release: 1 }
-    }).connect(this.channelStrips.get('lead')!);
-    this.synths.set('lead', lead);
-
-    // 6. Lush Pad
-    const pad = new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: 'sine' },
-      envelope: { attack: 3, decay: 1, sustain: 1, release: 5 }
-    }).connect(this.channelStrips.get('pad')!);
-    this.synths.set('pad', pad);
-
-    // 7. Aggressive Synth Brass
-    const brass = new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: 'sawtooth' },
-      envelope: { attack: 0.1, decay: 0.3, sustain: 0.5, release: 0.8 }
-    }).connect(this.channelStrips.get('brass')!);
-    this.synths.set('brass', brass);
   }
 
   public async setComposition(composition: Composition) {

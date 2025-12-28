@@ -25,8 +25,8 @@ export interface Composition {
 
 export const PRODUCER_GROUPS = {
   "Drill": ["Young Chop", "808Melo", "AXL Beats", "Carns Hill"],
-  "Trap": ["Metro Boomin", "Shawty Redd", "Zaytoven", "Lex Luger", "Southside", "TM88", "Murda Beatz", "Tay Keith"],
-  "Horrorcore": ["Prince Paul", "RZA", "Esham", "Mike E. Clark", "DJ Paul", "Juicy J", "Necro"],
+  "Trap": ["Metro Boomin", "Shawty Redd", "Zaytoven", "Lex Luger", "Southside", "TM88", "Murda Beatz", "Tay Keith", "Devereaux"],
+  "Horrorcore": ["Prince Paul", "RZA", "Esham", "Mike E. Clark", "DJ Paul", "Juicy J", "Necro", "Devereaux"],
   "Crunk": ["Lil Jon", "DJ Paul", "Juicy J"],
   "Alternative": ["J Dilla", "Madlib", "The Alchemist", "El-P", "Dan the Automator"],
   "Shiny Suit": ["The Neptunes", "Timbaland", "Swizz Beatz", "Just Blaze", "Scott Storch"],
