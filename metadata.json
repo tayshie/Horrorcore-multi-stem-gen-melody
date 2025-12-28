@@ -1,0 +1,7 @@
+{
+  "name": "Devereaux Horrorcore Melody Generator",
+  "description": "A dark, atmospheric application that generates eerie horrorcore melodies and industrial soundscapes inspired by the production style of Devereaux using Gemini AI and Tone.js.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
