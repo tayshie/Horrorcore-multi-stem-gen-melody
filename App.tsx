@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { PRODUCER_GROUPS, VibeType, Composition, MUSICAL_KEYS, MelodyLayer, ProducerCategory } from './types';
 import { generateProducerMelody } from './services/geminiService';
@@ -103,8 +104,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const analyzer = audioEngine.getAnalyzer();
     const bufferLength = analyzer.size;
-    const dataArray = new Uint8Array(bufferLength);
-
+    
     const draw = () => {
       if (!canvasRef.current) return;
       const canvas = canvasRef.current;
@@ -112,30 +112,69 @@ const App: React.FC = () => {
       if (!ctx) return;
 
       requestRef.current = requestAnimationFrame(draw);
-      analyzer.getValue().forEach((v, i) => {
-        dataArray[i] = (Number(v) + 140) * 2; 
-      });
+      
+      const values = analyzer.getValue();
 
-      ctx.fillStyle = 'rgba(5, 5, 5, 0.4)';
+      // Background clearing with trail effect
+      ctx.fillStyle = 'rgba(5, 5, 5, 0.2)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      ctx.lineWidth = 1.5;
-      ctx.strokeStyle = '#991b1b';
-      ctx.beginPath();
-      const sliceWidth = (canvas.width * 1.0) / bufferLength;
+      const barWidth = (canvas.width / (bufferLength / 2)) * 2.5;
+      let barHeight;
       let x = 0;
-      for (let i = 0; i < bufferLength; i++) {
-        const v = dataArray[i] / 128.0;
-        const y = (v * canvas.height) / 2;
-        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-        x += sliceWidth;
+
+      // Draw Symmetrical Frequency Bars
+      for (let i = 0; i < bufferLength / 2; i++) {
+        // Map decibel values (-140 to 0) to height
+        const val = Number(values[i]);
+        barHeight = Math.max(0, (val + 100) * (canvas.height / 100));
+
+        // Central gradient
+        const gradient = ctx.createLinearGradient(0, canvas.height, 0, canvas.height - barHeight);
+        gradient.addColorStop(0, '#450a0a'); // Deep dark red
+        gradient.addColorStop(0.5, '#991b1b'); // Red-800
+        gradient.addColorStop(1, '#ef4444'); // Red-500
+
+        ctx.fillStyle = gradient;
+        
+        // Draw bars mirroring from center
+        const centerY = canvas.height;
+        ctx.fillRect(canvas.width / 2 + x, centerY - barHeight, barWidth - 1, barHeight);
+        ctx.fillRect(canvas.width / 2 - x, centerY - barHeight, barWidth - 1, barHeight);
+
+        x += barWidth;
       }
-      ctx.lineTo(canvas.width, canvas.height / 2);
+
+      // Draw Spectral Waveform Line (overlay)
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+      ctx.beginPath();
+      let xWave = 0;
+      const sliceWidth = canvas.width / bufferLength;
+      for (let i = 0; i < bufferLength; i++) {
+        const val = (Number(values[i]) + 100) * (canvas.height / 150);
+        const y = canvas.height - val - 20;
+        if (i === 0) ctx.moveTo(xWave, y);
+        else ctx.lineTo(xWave, y);
+        xWave += sliceWidth;
+      }
       ctx.stroke();
+
+      // Random "Glitch" spikes for atmospheric horror feel
+      if (isPlaying && Math.random() > 0.95) {
+        ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+        ctx.lineWidth = 1;
+        const glitchX = Math.random() * canvas.width;
+        ctx.beginPath();
+        ctx.moveTo(glitchX, 0);
+        ctx.lineTo(glitchX, canvas.height);
+        ctx.stroke();
+      }
     };
+    
     draw();
     return () => { if (requestRef.current) cancelAnimationFrame(requestRef.current); };
-  }, []);
+  }, [isPlaying]);
 
   return (
     <div className="h-screen w-screen flex flex-col bg-[#050505] overflow-hidden text-gray-300">
@@ -281,7 +320,7 @@ const App: React.FC = () => {
 
           {/* Visualization Row */}
           <section className="dark-panel p-2 rounded-xl border-red-900/40 relative overflow-hidden h-40 group">
-             <canvas ref={canvasRef} width={1200} height={256} className="w-full h-full opacity-20 grayscale group-hover:grayscale-0 transition-all duration-1000" />
+             <canvas ref={canvasRef} width={1200} height={256} className="w-full h-full opacity-60 transition-all duration-1000" />
              <div className="absolute inset-0 flex items-center justify-between px-10 pointer-events-none">
                 <div className="flex flex-col">
                   <span className="text-[10px] text-red-900 font-black uppercase tracking-[0.5em]">{activeCategory} // {selectedKey} // {composition ? composition.vibe.toUpperCase() : 'SEARCHING'}</span>
